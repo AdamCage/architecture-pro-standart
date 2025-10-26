@@ -1,6 +1,6 @@
 # IT-Landscape AS-IS
 
-![integration_plantuml.svg](integration_plantuml.svg)
+![it_landscape.svg](it_landscape.svg)
 
 # Integrations AS-IS
 
