@@ -1,0 +1,47 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+LAYOUT_WITH_LEGEND()
+
+Person(customer, "Клиент", "Подаёт заявку онлайн")
+Person_Ext(call_agent, "Агент КЦ", "Поддержка клиентов")
+
+System_Ext(bki, "Бюро кредитных историй", "REST API")
+System_Ext(telco, "Телеком-оператор", "Доставка СМС")
+
+System_Boundary(bank, "Банк «Стандарт»") {
+  System(ib, "Интернет-банк", "ASP.NET MVC 4.5", "ЛК клиента")
+  System(site, "Сайт", "PHP + React", "Форма заявки для новых клиентов")
+  System(bff, "Credit BFF", "REST", "Оркестрация онлайна, OTP, статусы")
+  System(offers, "Offers API", "REST", "Предодобренные офферы")
+  System(appapi, "App API (Credit)", "REST + DB", "Заявки, статусы, аудит")
+  System(bus, "Kafka", "Event bus", "application.*, status.*")
+  System(conv, "Кредитный конвейер", "Camunda + Oracle", "Маршрутизация и решение")
+  System(score, "Скоринг", "ML сервис", "Оценка риска")
+  System(profile, "Клиентская витрина", "Read-only", "Данные клиента из АБС (реплика)")
+  System(abs, "АБС", "Delphi + Oracle", "Договоры и проводки")
+  System(otp, "OTP сервис", "Stateless", "Генерация/валидация OTP")
+  System(smsgw, "СМС-шлюз", "Внутренний", "Отправка СМС")
+}
+
+Rel(customer, ib, "Просмотр офферов, подача", "TLS")
+Rel(customer, site, "Подача заявки", "TLS")
+Rel(ib, offers, "GET офферы")
+Rel(ib, bff, "POST заявка / confirm OTP")
+Rel(site, bff, "POST заявка")
+
+Rel(bff, otp, "Запрос OTP")
+Rel(otp, smsgw, "Отправка СМС")
+Rel(smsgw, telco, "Доставка")
+
+Rel(bff, appapi, "Создание заявки/статусы")
+Rel(appapi, bus, "publish application.created")
+Rel(conv, bus, "consume application.*")
+Rel(conv, score, "REST скоринг")
+Rel(score, bki, "REST БКИ")
+Rel(conv, appapi, "Решение/statuseы")
+Rel(appapi, abs, "Финализация договора (стейджинг/пакеты)")
+
+Rel(offers, profile, "Чтение профиля клиента (read-only)")
+Rel(call_agent, ib, "Поддержка клиента (read-only)")
+
+@enduml

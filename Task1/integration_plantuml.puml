@@ -1,0 +1,109 @@
+@startuml
+title Интеграции (AS-IS): банк "Стандарт"\nДепозиты и кредиты
+
+skinparam rectangle {
+  BackgroundColor White
+  BorderColor Black
+}
+skinparam database {
+  BackgroundColor White
+  BorderColor Black
+}
+skinparam componentStyle rectangle
+
+' --- Участники процессов ---
+actor "Клиент" as CUSTOMER
+actor "Оператор КЦ" as CCAGENT
+actor "Опер. партнёрского КЦ" as PCCAGENT
+actor "Менеджер фронт-офиса\n(отделение)" as FO
+actor "Менеджер депозитов (БО)" as BO_DEP
+actor "Менеджер кредитов (БО)" as BO_CRE
+
+' --- Контейнеры ---
+package "Внутренний ЦОД" {
+  package "Система кол-центра" {
+    rectangle "React + Spring Boot + PostgreSQL\nмикросервисы (подрядчик)" as CC
+    database  "БД КЦ\nPostgreSQL" as CCDB
+  }
+
+  package "Интернет-банк" {
+    rectangle "ASP.NET MVC 4.5\nMS SQL (монолит)" as IB
+    database  "БД IB\nMS SQL" as IBDB
+  }
+
+  package "АБС" {
+    rectangle "Delphi клиент + Oracle\nPL/SQL процедуры" as ABS
+    database  "БД АБС\nOracle" as ABSDB
+
+    rectangle "СМС-шлюз\n(внутри банка)" as SMSGW
+  }
+
+  package "BPM" {
+    rectangle "Кредитный конвейер\nCamunda BPM + Oracle" as CONV
+    database  "БД Конвейера\nOracle" as CONVDB
+  }
+
+  package "Система Скоринга" {
+    rectangle "Скоринг\nFlask + PostgreSQL\nML сервис (REST)" as SCOR
+    database  "БД Скоринга\nPostgreSQL" as SCORDB
+  }
+
+  rectangle "Сайт\nPHP + React.js" as SITE
+}
+
+package "Внешние" {
+  rectangle "Телеком-оператор\n(внешний)" as TELCO
+  rectangle "Партнёрский кол-центр\n(внешняя система)" as PCC
+  rectangle "БКИ\n(внешний REST API)" as BKI
+}
+
+package "Нерегламентные каналы" {
+  cloud "Email" as EMAIL
+  folder "Excel\n(расчёт депозитных ставок)" as EXCEL
+}
+
+' --- Взаимодействия систем (общие) ---
+IB --> IBDB : внутр. операции
+IB -[#red,dashed]-> ABSDB : чтение/запись\n(интеграция по БД)
+
+CC --> CCDB : внутр. операции
+
+ABS --> SMSGW : СМС уведомления
+SMSGW --> TELCO : отправка
+TELCO --> CUSTOMER : доставка СМС
+
+' --- Кол-центр и лиды ---
+CUSTOMER --> CCAGENT : звонок/вопрос по депозиту/кредиту
+CCAGENT --> CC : оформление обращения
+CC --> ABS : создание обращения/заявки\n(API/шина)
+PCCAGENT --> PCC : исходящие/приём лидов
+PCC ..> CC : лиды/передача обращений
+
+' --- Депозиты (AS-IS) ---
+CUSTOMER --> FO : визит в отделение
+FO --> EMAIL : запрос спец/актуальной ставки
+BO_DEP --> EXCEL : расчёт ставки\nна базе показателей
+BO_DEP --> EMAIL : ответ со ставкой
+EMAIL ..> ABS : параметры ставок\nручной ввод в АБС
+FO --> ABS : оформление депозита\nдокументы и загрузка
+ABS --> SMSGW : СМС статус/оффер
+
+' --- Кредиты (AS-IS) ---
+FO --> ABS : оформление заявки на кредит
+ABSDB -[#brown,dashed]-> CONVDB : nightly batch заявок\n(по БД/ETL)
+BO_CRE --> CONV : обработка заявки\n(интерфейс Camunda)
+CONV --> SCOR : REST скоринг
+SCOR --> SCORDB : запись фич/результатов
+SCOR --> BKI : REST запрос
+BKI --> SCOR : ответ БКИ
+SCOR --> CONV : скоринговый результат
+CONV --> BO_CRE : решение по заявке
+CONVDB -[#brown,dashed]-> ABSDB : nightly batch результатов
+ABS --> ABSDB : проводки/зачисление средств
+
+' --- Напоминание о прямой интеграции ИБ (историческая) ---
+note right of IB #ffffcc
+Интернет-банк сегодня: платежи и\nоткрытие текущих счетов.\nПрямая интеграция по БД с АБС.
+end note
+
+@enduml

@@ -1,0 +1,39 @@
+gantt
+    title RoadMap: ставки для КЦ и партнёра (MVP 6 мес, target 12 мес)
+    dateFormat  YYYY-MM-DD
+
+    section Rate Service
+    Контракты и API / аудит        :rs1, 2025-11-01, 21d
+    Публикатор событий (Kafka)     :rs2, after rs1, 10d
+    Admin UI роли/журнал           :rs3, after rs2, 14d
+
+    section CRM КЦ
+    Экран ставок (UI)              :cc1, 2025-11-15, 21d
+    Интеграция через Rates Proxy   :cc2, after cc1, 14d
+    Алерты и метрики               :cc3, after cc2, 7d
+
+    section Rates Proxy (новый)
+    Кэш Redis + REST               :rp1, 2025-12-01, 14d
+    Инвалидация по событиям        :rp2, after rp1, 10d
+    Нагрузочное тестирование       :rp3, after rp2, 7d
+
+    section Rates Exporter (новый)
+    Генерация CSV/JSON + PGP       :ex1, 2025-12-10, 21d
+    Расписание: full+delta         :ex2, after ex1, 10d
+    Ретраи/идемпотентность         :ex3, after ex2, 7d
+
+    section DMZ / Безопасность
+    Канал передачи (SFTP/FTPS/Email):dmz1, 2025-12-20, 14d
+    Ключи/секреты/ротация          :dmz2, after dmz1, 7d
+
+    section Партнёрский КЦ
+    Тестовый стенд и приемка       :pk1, 2026-01-10, 14d
+    Пилот (ограниченная выборка)   :pk2, after pk1, 14d
+    Промышленная эксплуатация      :pk3, after pk2, 7d
+
+    section Эксплуатация (MVP DONE)
+    Мониторинг SLA и отчётность    :ops1, 2026-02-10, 21d
+
+    section Target 12 мес (вехи)
+    Почасовые дельты (опт.)        :t1, 2026-06-01, 30d
+    Multi-tenant экспорт (2+ партнёра):t2, after t1, 30d
