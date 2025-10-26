@@ -1,0 +1,58 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+LAYOUT_WITH_LEGEND()
+
+Person(cc_agent, "Агент КЦ")
+Person_Ext(pcc_agent, "Агент партнёрского КЦ")
+
+System_Boundary(bank, "Банк «Стандарт»") {
+
+  System_Boundary(rate_sys, "Rate Service") {
+    Container(rate_api, "Rate API", ".NET/Java REST", "CRUD ставок, версии, аудит")
+    Container(rate_admin, "Admin UI", "Web", "Управление и публикация ставок")
+    ContainerDb(rate_db, "Rates DB", "PostgreSQL", "Ставки, аудит, версии")
+    Container(rate_pub, "Rate Publisher", "Worker", "Публикация событий rate.updated")
+  }
+
+  System_Boundary(cc_sys, "CRM КЦ") {
+    Container(cc_ui, "CC UI", "React", "Экран оператора")
+    Container(cc_be, "CC Backend", "Spring Boot", "API CRM")
+    Container(rproxy, "Rates Proxy", ".NET/Java", "Кэш ставок для CRM, TTL/инвалидация")
+    ContainerDb(rproxy_cache, "Rates Cache", "Redis", "Кэш NRT")
+  }
+
+  System_Boundary(export, "Экспорт во внешний КЦ") {
+    Container(exporter, "Rates Exporter", "Worker/Batch", "Файл CSV/JSON + подпись/PGP")
+    ContainerDb(export_log, "Export Log", "PostgreSQL", "Журнал выгрузок/доставки")
+    Container(dmz, "DMZ File Gateway", "SFTP/FTPS/Email", "Односторонняя передача")
+  }
+
+  Container(bus, "Kafka", "Event bus", "rate.updated")
+  Container(obs, "Observability", "Prometheus/Grafana/OTel", "Метрики/логи/трейсы")
+}
+
+' Связи
+Rel(cc_agent, cc_ui, "Работа")
+Rel(cc_ui, cc_be, "REST")
+Rel(cc_be, rproxy, "GET /rates")
+Rel(rproxy, rproxy_cache, "read-through")
+Rel(rproxy, rate_api, "GET /rates?segment=public")
+Rel(rate_admin, rate_api, "Manage rates")
+Rel(rate_api, rate_db, "CRUD")
+Rel(rate_pub, rate_db, "Listen changes")
+Rel(rate_pub, bus, "publish rate.updated")
+
+Rel(exporter, bus, "consume rate.updated")
+Rel(exporter, rate_api, "GET /rates (snapshot/delta)")
+Rel(exporter, export_log, "write logs")
+Rel(exporter, dmz, "Push file (PGP/sign)")
+Rel(dmz, pcc_agent, "Файл доступен в системе партнёра")
+
+Rel(obs, (rate_api, rproxy, exporter, dmz, bus), "metrics/logs/traces")
+
+' Политики
+AddProperty(dmz, "Канал", "Односторонний исходящий")
+AddProperty(rproxy, "SLA обновления", "≤5 мин")
+AddProperty(exporter, "Расписание", "07:00 full + hourly delta")
+
+@enduml
