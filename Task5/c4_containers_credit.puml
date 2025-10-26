@@ -1,0 +1,62 @@
+@startuml
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+LAYOUT_WITH_LEGEND()
+
+Person(customer, "Клиент")
+Person_Ext(call_agent, "Агент КЦ")
+System_Ext(bki, "БКИ", "REST API")
+System_Ext(telco, "Телеком-оператор", "СМС")
+
+System_Boundary(ib_sys, "Интернет-банк") {
+  Container(ib, "IB Monolith", "ASP.NET MVC 4.5", "UI")
+  ContainerDb(ibdb, "IB DB", "MS SQL", "Сессии/профиль ИБ")
+  Container(bff, "Credit BFF", ".NET/Java", "Оркестрация потока, OTP, статусы")
+  Container(otp, "OTP Service", "Stateless", "Коды подтверждения")
+  Container(smsgw, "СМС-шлюз", "Внутренний", "Отправка СМС")
+}
+
+System_Boundary(credit, "Кредитные сервисы") {
+  Container(offers, "Offers API", ".NET/Java + Redis", "Витрина предодобренных офферов")
+  Container(profile, "Customer Profile RO", "ETL/реплика", "Read-only данные клиента из АБС")
+  Container(appapi, "Credit App API", "FastAPI/.NET/Java", "CRUD заявок, статусы, аудит, идемпотентность")
+  ContainerDb(appdb, "Credit DB", "PostgreSQL", "Заявки/статусы/аудит")
+  Container(bus, "Kafka", "Event bus", "application.*, status.*")
+}
+
+System_Boundary(conveyor, "Кредитный конвейер") {
+  Container(camunda, "Camunda BPM", "Java + Oracle", "Маршруты/таски")
+  Container(score, "Scoring Service", "Python + REST", "ML-модель")
+}
+
+System_Boundary(abs_sys, "АБС") {
+  Container(abs_int, "ABS Integration", "PL/SQL/стейджинг", "Импорт договоров/статусов")
+  ContainerDb(absdb, "ABS DB", "Oracle", "Операционные данные")
+}
+
+' Потоки
+Rel(customer, ib, "UX", "HTTPS")
+Rel(ib, bff, "POST /applications ; GET /status", "HTTPS")
+Rel(bff, otp, "POST /otp")
+Rel(otp, smsgw, "send")
+Rel(smsgw, telco, "deliver")
+
+Rel(ib, offers, "GET /offers?clientId", "HTTPS")
+Rel(offers, profile, "RO lookup")
+Rel(bff, appapi, "POST /applications; PATCH /status", "HTTPS")
+Rel(appapi, appdb, "CRUD")
+Rel(appapi, bus, "publish application.created")
+
+Rel(bus, camunda, "consume application.*")
+Rel(camunda, score, "POST /score")
+Rel(score, bki, "REST БКИ")
+Rel(camunda, appapi, "callback decision/status")
+
+Rel(appapi, abs_int, "Регламентная финализация")
+Rel(abs_int, absdb, "Импорт/проводки")
+
+' Политики
+AddProperty(abs_sys, "Правило", "Нет онлайн IB→ABS")
+AddProperty(bff, "SLA", "create p95 ≤ 800ms")
+AddProperty(offers, "Кэш", "Redis + инвалидация")
+
+@enduml
